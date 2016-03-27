@@ -57,6 +57,7 @@ addNewRandomTiles' gen board empty_squares =
             (foldl f board $ zip new_tiles_pos new_tiles, gen'')
     where f b ((i, j), sq) = setElem sq (i, j) b
 
+-- FIXME: to be refactored with getNewRandomTilePositions
 getNewRandomTiles :: RandomGen g => g -> Int -> ([Square], g)
 getNewRandomTiles gen 0 = ([], gen)
 getNewRandomTiles gen n =
