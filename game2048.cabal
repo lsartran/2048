@@ -1,0 +1,43 @@
+name:                game2048
+version:             0.1.0.0
+synopsis:            Haskell implementation of 2048
+description:         Please see README.md
+homepage:            http://github.com/githubuser/game2048#readme
+license:             MIT
+license-file:        LICENSE
+author:              Laurent Sartran
+maintainer:          lsartran@gmail.com
+copyright:           2016 Laurent Sartran
+build-type:          Simple
+-- extra-source-files:
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Logic
+  build-depends:       base >= 4.7 && < 5
+                     , matrix
+                     , random
+                     , vector
+  default-language:    Haskell2010
+
+executable game2048
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , game2048
+  default-language:    Haskell2010
+
+test-suite game2048-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , game2048
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/lsartran/game2048
