@@ -89,30 +89,36 @@ randomL gen l =
         (l !! idx, gen')
 
 -- |Slide tiles based on user input
-slideTiles :: Direction -> Board -> (Integer, Board)
-slideTiles Up b = 
-    let slideResult = map (slideUpColumn . ((flip getCol) b)) [1..boardSize]
+slideAndCollapseTiles :: Direction -> Board -> (Integer, Board)
+slideAndCollapseTiles Up b = 
+    let slideResult = map (slideAndCollapseColumn . ((flip getCol) b)) [1..boardSize]
         newPoints = sum $ map snd slideResult
         newBoard = foldl1 (<|>) $ map (colVector . fst) slideResult in
     (newPoints, newBoard)
 
 -- use the fact that (a,) is a functor
-slideTiles LeftD b = (fmap transpose) $ slideTiles Up $ transpose b 
-slideTiles RightD b = (fmap transpose) $ slideTiles Down $ transpose b
-slideTiles Down b = (fmap flipBoard) $ slideTiles Up $ flipBoard b
+slideAndCollapseTiles LeftD b = (fmap transpose) $ slideAndCollapseTiles Up $ transpose b 
+slideAndCollapseTiles RightD b = (fmap transpose) $ slideAndCollapseTiles Down $ transpose b
+slideAndCollapseTiles Down b = (fmap flipBoard) $ slideAndCollapseTiles Up $ flipBoard b
 
 flipBoard :: Board -> Board
 flipBoard b = foldl1 (<->) $ map (rowVector . ((flip getRow) b)) $ reverse [1..boardSize]
 
-slideUpColumn :: V.Vector Square -> (V.Vector Square, Integer)
-slideUpColumn v =
+slideColumn :: V.Vector Square -> V.Vector Square
+slideColumn v =
+    case v V.! 0 of
+        Nothing -> V.snoc (V.tail v) Nothing
+        _ -> v
+
+slideAndCollapseColumn :: V.Vector Square -> (V.Vector Square, Integer)
+slideAndCollapseColumn v =
     if (V.length v < 2) then (v, 0) else
         case ((v V.! 0), (v V.! 1)) of
-            (Nothing, _) -> let (w, pts) = slideUpColumn (V.tail v) in (V.snoc w Nothing, pts)
+            (Nothing, _) -> let (w, pts) = slideAndCollapseColumn (V.tail v) in (V.snoc w Nothing, pts)
             (Just x, Just y) -> if x == y
-                then (V.snoc (V.cons (Just $ 2*x) (V.drop 2 v)) Nothing, 2*x)
-                else let (w, pts) = slideUpColumn (V.tail v) in (V.cons (v V.! 0) w, pts)
-            (Just _, Nothing) -> let (w, pts) = slideUpColumn (V.cons (v V.! 0) (V.drop 2 v)) in (V.snoc w Nothing, pts)
+                then (V.snoc (V.cons (Just $ 2*x) (slideColumn $ V.drop 2 v)) Nothing, 2*x)
+                else let (w, pts) = slideAndCollapseColumn (V.tail v) in (V.cons (v V.! 0) w, pts)
+            (Just _, Nothing) -> let (w, pts) = slideAndCollapseColumn (V.cons (v V.! 0) (V.drop 2 v)) in (V.snoc w Nothing, pts)
 
 emptySquares :: Board -> [(Int, Int)]
 emptySquares board = [(i,j) | i <- [1..boardSize], j <- [1..boardSize], isNothing $ getElem i j board]
@@ -134,7 +140,7 @@ getDirectionIO b = do
 stepIO :: forall g. RandomGen g => (Board -> IO Direction) -> g -> Board -> IO ()
 stepIO act g b = do
     d <- act b
-    let (_, b') = slideTiles d b
+    let (_, b') = slideAndCollapseTiles d b
     case addNewRandomTiles g b' of
         Nothing -> return ()
         Just (b'', g') -> stepIO act g' b''
@@ -143,7 +149,7 @@ stepAuto :: forall g. RandomGen g => (Board -> Direction) -> g -> Board -> IO ()
 stepAuto strat g b = do
     showBoard b
     let d = strat b
-        (_, b') = slideTiles d b in
+        (_, b') = slideAndCollapseTiles d b in
         case addNewRandomTiles g b' of
             Nothing -> putStrLn "GAME OVER"
             Just (b'', g') -> stepAuto strat g' b''
