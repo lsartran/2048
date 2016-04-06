@@ -26,6 +26,12 @@ type Board = Matrix Square
 data Direction = Up | Down | LeftD | RightD
     deriving (Eq, Show)
 
+-- |The state of the game is fully defined by the board and the number of points the player has
+data GameState = GameState {
+    gameBoard :: Board,
+    gamePoints :: Integer
+}
+
 -- * Constants
 
 -- |Size of the square board (4x4 in the original 2048)
@@ -83,23 +89,30 @@ randomL gen l =
         (l !! idx, gen')
 
 -- |Slide tiles based on user input
-slideTiles :: Direction -> Board -> Board
-slideTiles Up b = foldl1 (<|>) $ map (colVector . slideUpColumn . ((flip getCol) b)) [1..boardSize]
-slideTiles LeftD b = transpose $ slideTiles Up $ transpose b
-slideTiles RightD b = transpose $ slideTiles Down $ transpose b
-slideTiles Down b = flipBoard $ slideTiles Up $ flipBoard b
+slideTiles :: Direction -> Board -> (Integer, Board)
+slideTiles Up b = 
+    let slideResult = map (slideUpColumn . ((flip getCol) b)) [1..boardSize]
+        newPoints = sum $ map snd slideResult
+        newBoard = foldl1 (<|>) $ map (colVector . fst) slideResult in
+    (newPoints, newBoard)
 
+-- use the fact that (a,) is a functor
+slideTiles LeftD b = (fmap transpose) $ slideTiles Up $ transpose b 
+slideTiles RightD b = (fmap transpose) $ slideTiles Down $ transpose b
+slideTiles Down b = (fmap flipBoard) $ slideTiles Up $ flipBoard b
+
+flipBoard :: Board -> Board
 flipBoard b = foldl1 (<->) $ map (rowVector . ((flip getRow) b)) $ reverse [1..boardSize]
 
-slideUpColumn :: V.Vector Square -> V.Vector Square
+slideUpColumn :: V.Vector Square -> (V.Vector Square, Integer)
 slideUpColumn v =
-    if (V.length v < 2) then v else
+    if (V.length v < 2) then (v, 0) else
         case ((v V.! 0), (v V.! 1)) of
-            (Nothing, _) -> V.snoc (slideUpColumn (V.tail v)) Nothing
+            (Nothing, _) -> let (w, pts) = slideUpColumn (V.tail v) in (V.snoc w Nothing, pts)
             (Just x, Just y) -> if x == y
-                then V.snoc (V.cons (Just $ 2*x) (V.drop 2 v)) Nothing
-                else V.cons (v V.! 0) $ slideUpColumn (V.tail v)
-            (Just x, Nothing) -> V.snoc (slideUpColumn (V.cons (v V.! 0) (V.drop 2 v))) Nothing
+                then (V.snoc (V.cons (Just $ 2*x) (V.drop 2 v)) Nothing, 2*x)
+                else let (w, pts) = slideUpColumn (V.tail v) in (V.cons (v V.! 0) w, pts)
+            (Just _, Nothing) -> let (w, pts) = slideUpColumn (V.cons (v V.! 0) (V.drop 2 v)) in (V.snoc w Nothing, pts)
 
 
 getDirection :: IO Direction
@@ -115,10 +128,11 @@ getDirection = do
 emptySquares :: Board -> [(Int, Int)]
 emptySquares board = [(i,j) | i <- [1..boardSize], j <- [1..boardSize], isNothing $ getElem i j board]
 
+step :: forall g. RandomGen g => g -> Board -> IO ()
 step g b = do
     putStrLn $ show b
     d <- getDirection
-    let b' = slideTiles d b
+    let (_, b') = slideTiles d b
     case addNewRandomTiles g b' of
         Nothing -> return ()
         Just (b'', g') -> step g' b''
