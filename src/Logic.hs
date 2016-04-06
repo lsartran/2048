@@ -27,7 +27,7 @@ data Direction = Up | Down | LeftD | RightD
     deriving (Eq, Show)
 
 -- |The state of the game is fully defined by the board and the number of points the player has
-data GameState = GameState {
+data GameState = GameOver | LiveGame {
     gameBoard :: Board,
     gamePoints :: Integer
 }
@@ -114,30 +114,41 @@ slideUpColumn v =
                 else let (w, pts) = slideUpColumn (V.tail v) in (V.cons (v V.! 0) w, pts)
             (Just _, Nothing) -> let (w, pts) = slideUpColumn (V.cons (v V.! 0) (V.drop 2 v)) in (V.snoc w Nothing, pts)
 
+emptySquares :: Board -> [(Int, Int)]
+emptySquares board = [(i,j) | i <- [1..boardSize], j <- [1..boardSize], isNothing $ getElem i j board]
 
-getDirection :: IO Direction
-getDirection = do 
+showBoard :: Board -> IO ()
+showBoard b = putStrLn $ show b
+
+getDirectionIO :: Board -> IO Direction
+getDirectionIO b = do 
+    showBoard b
     l <- getLine
     case l of
         "up" -> return Up
         "down" -> return Down
         "left" -> return LeftD
         "right" -> return RightD
-        _ -> getDirection
+        _ -> getDirectionIO b
 
-emptySquares :: Board -> [(Int, Int)]
-emptySquares board = [(i,j) | i <- [1..boardSize], j <- [1..boardSize], isNothing $ getElem i j board]
-
-step :: forall g. RandomGen g => g -> Board -> IO ()
-step g b = do
-    putStrLn $ show b
-    d <- getDirection
+stepIO :: forall g. RandomGen g => (Board -> IO Direction) -> g -> Board -> IO ()
+stepIO act g b = do
+    d <- act b
     let (_, b') = slideTiles d b
     case addNewRandomTiles g b' of
         Nothing -> return ()
-        Just (b'', g') -> step g' b''
+        Just (b'', g') -> stepIO act g' b''
+
+stepAuto :: forall g. RandomGen g => (Board -> Direction) -> g -> Board -> IO ()
+stepAuto strat g b = do
+    showBoard b
+    let d = strat b
+        (_, b') = slideTiles d b in
+        case addNewRandomTiles g b' of
+            Nothing -> putStrLn "GAME OVER"
+            Just (b'', g') -> stepAuto strat g' b''
 
 play :: IO ()
 play = do
     let Just (board, gen) = addNewRandomTiles (mkStdGen 0) emptyBoard in do
-            step gen board
+            stepIO getDirectionIO gen board
